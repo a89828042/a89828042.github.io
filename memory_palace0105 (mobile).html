@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cat Planet: Mobile Master</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+        :root {
+            --bg-color: #000;
+            --term-green: #4af626;
+            --heart-red: #ff3366;
+            --ui-bg: rgba(15, 15, 20, 0.98);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'VT323', monospace;
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            touch-action: none; /* Disable default touch gestures */
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 900px;
+            height: 700px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-origin: center center;
+        }
+
+        #game-container {
+            position: absolute;
+            width: 900px;
+            height: 700px;
+            border: 4px solid #222;
+            background: #000;
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+            image-rendering: pixelated;
+            transition: border-color 3s;
+        }
+
+        canvas {
+            display: block; width: 100%; height: 100%;
+            filter: grayscale(100%) brightness(60%) contrast(120%);
+            transition: filter 3s ease-in-out;
+        }
+
+        /* UI ELEMENTS */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; justify-content: center; align-items: center; z-index: 20;
+        }
+
+        .dialog-box {
+            background: var(--ui-bg); border: 2px solid var(--term-green);
+            padding: 30px; width: 550px; pointer-events: auto; display: none;
+            box-shadow: 0 0 30px rgba(74, 246, 38, 0.1); 
+            animation: slideUp 0.2s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        h2 { font-family: 'Press Start 2P'; font-size: 1rem; color: var(--term-green); margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        
+        .control-hint {
+            font-size: 0.9rem; color: #666; margin-top: 20px; text-align: right;
+            border-top: 1px solid #333; padding-top: 10px; font-family: 'Press Start 2P';
+        }
+
+        input[type=range] { width: 100%; height: 10px; background: #333; outline: none; -webkit-appearance: none; border-radius: 5px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; background: var(--term-green); cursor: pointer; border-radius: 50%; border: 2px solid #fff; }
+        
+        input[type=text] { 
+            width: 95%; background: #222; border: 2px solid #555; color: white; 
+            font-family: 'Press Start 2P'; padding: 15px; margin-top: 10px; font-size: 1rem;
+        }
+        input[type=text]:focus { border-color: var(--term-green); outline: none; }
+        
+        .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
+        .tag { 
+            background: #2a2a2a; border: 2px solid #444; padding: 10px 15px; cursor: pointer; 
+            font-size: 1.2rem; transition: 0.1s; 
+        }
+        .tag.selected { background: var(--term-green); color: black; border-color: var(--term-green); font-weight: bold; }
+        .tag.focused { border-color: white; transform: scale(1.05); z-index: 10; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+
+        .btn { 
+            background: var(--term-green); color: #000; border: none; padding: 15px; width: 100%; 
+            font-family: 'Press Start 2P'; cursor: pointer; margin-top: 20px; font-size: 1rem;
+        }
+
+        #hud { position: absolute; top: 20px; right: 20px; font-family: 'Press Start 2P'; font-size: 0.7rem; color: #666; z-index: 5; }
+        
+        #diegetic-text {
+            position: absolute; bottom: 100px; width: 100%; text-align: center;
+            font-family: 'Press Start 2P'; font-size: 0.8rem; color: #888;
+            pointer-events: none; opacity: 0; transition: opacity 2s; text-shadow: 2px 2px 0 #000;
+        }
+
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,1); display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 50; cursor: pointer; transition: opacity 1s;
+        }
+        .blink { animation: blink 1.5s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        #final-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(255, 220, 180, 0.15); z-index: 100; pointer-events: none;
+        }
+        .final-text-box { 
+            background: rgba(10, 10, 10, 0.85); padding: 50px; border-radius: 20px; 
+            text-align: center; opacity: 0; transition: opacity 4s ease-in; border: 1px solid #444;
+        }
+        .final-text-box.show { opacity: 1; }
+
+        #music-visualizer {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 5px; z-index: 5;
+        }
+        .note-indicator { width: 10px; height: 10px; background: #333; border-radius: 50%; transition: background 0.2s; }
+        .note-indicator.active { background: var(--term-green); box-shadow: 0 0 5px var(--term-green); }
+        .note-indicator.playing { transform: scale(1.5); background: white; }
+        #n15 { border: 1px solid #555; }
+        #n15.active { background: var(--heart-red); box-shadow: 0 0 10px var(--heart-red); }
+
+        /* --- MOBILE CONTROLS --- */
+        #mobile-controls {
+            display: none; /* Hidden on desktop by default */
+            position: absolute; bottom: 20px; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 80;
+        }
+
+        .d-pad {
+            position: absolute; bottom: 30px; left: 30px;
+            width: 150px; height: 150px; pointer-events: auto;
+        }
+
+        .action-btn {
+            position: absolute; bottom: 50px; right: 40px;
+            width: 80px; height: 80px; background: rgba(74, 246, 38, 0.2);
+            border: 2px solid var(--term-green); border-radius: 50%;
+            pointer-events: auto; display: flex; justify-content: center; align-items: center;
+            font-family: 'Press Start 2P'; font-size: 0.8rem; color: var(--term-green);
+            user-select: none; -webkit-user-select: none;
+        }
+        .action-btn:active { background: rgba(74, 246, 38, 0.5); transform: scale(0.95); }
+
+        .d-btn {
+            position: absolute; width: 50px; height: 50px;
+            background: rgba(255,255,255,0.1); border: 1px solid #555;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.5rem; color: #aaa; user-select: none; -webkit-user-select: none;
+        }
+        .d-btn:active { background: rgba(255,255,255,0.3); }
+
+        #d-up { top: 0; left: 50px; }
+        #d-down { bottom: 0; left: 50px; }
+        #d-left { top: 50px; left: 0; }
+        #d-right { top: 50px; right: 0; }
+
+        @media (max-width: 950px) {
+            #mobile-controls { display: block; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <div id="game-container">
+            <canvas id="gameCanvas" width="900" height="700"></canvas>
+            
+            <div id="hud">MELODY: <span id="mem-count">0</span>/16</div>
+            
+            <div id="diegetic-text">The room is dark, but memories remain.</div>
+
+            <div id="music-visualizer">
+                <div class="note-indicator" id="n0"></div><div class="note-indicator" id="n1"></div>
+                <div class="note-indicator" id="n2"></div><div class="note-indicator" id="n3"></div>
+                <div class="note-indicator" id="n4"></div><div class="note-indicator" id="n5"></div>
+                <div class="note-indicator" id="n6"></div><div class="note-indicator" id="n7"></div>
+                <div class="note-indicator" id="n8"></div><div class="note-indicator" id="n9"></div>
+                <div class="note-indicator" id="n10"></div><div class="note-indicator" id="n11"></div>
+                <div class="note-indicator" id="n12"></div><div class="note-indicator" id="n13"></div>
+                <div class="note-indicator" id="n14"></div><div class="note-indicator" id="n15"></div>
+            </div>
+
+            <div id="start-overlay" onclick="startGame()">
+                <h1 style="font-family:'Press Start 2P'; color:white; margin-bottom:30px;">THE MEMORY PALACE</h1>
+                <p style="font-size:1.5rem; color:#888; font-family:'VT323'; margin-bottom: 50px;">Headphones Required</p>
+                <p class="blink" style="font-size:1.2rem; color:var(--term-green); font-family:'Press Start 2P';">[ TAP TO WAKE UP ]</p>
+            </div>
+
+            <div id="ui-layer">
+                <div id="modal" class="dialog-box">
+                    <h2 id="m-title">Title</h2>
+                    <div id="m-content"></div>
+                    <div class="control-hint" id="hint-txt">[ARROWS] Adjust • [ENTER] Confirm</div>
+                </div>
+            </div>
+
+            <div id="final-screen">
+                <div class="final-text-box" id="final-msg">
+                    <h1 style="font-family:'Press Start 2P'; color:#fff; margin-bottom:30px; letter-spacing: 2px;">WELCOME HOME</h1>
+                    <p style="font-size:1.6rem; line-height:1.8; color:#ccc;">
+                        The song is complete.<br>
+                        The soul is calibrated.<br>
+                        <span style="color:var(--term-green); font-weight:bold; font-size:1.8rem;" id="cat-name-display">Companion</span> is here with you.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobile-controls">
+            <div class="d-pad">
+                <div class="d-btn" id="d-up">▲</div>
+                <div class="d-btn" id="d-down">▼</div>
+                <div class="d-btn" id="d-left">◀</div>
+                <div class="d-btn" id="d-right">▶</div>
+            </div>
+            <div class="action-btn" id="act-btn">OK</div>
+        </div>
+    </div>
+
+    <script>
+        const AudioEngine = {
+            ctx: null, droneNode: null, step: 0,
+            melodyMap: [
+                { note: 261.63, unlocked: false }, { note: 329.63, unlocked: false }, 
+                { note: 392.00, unlocked: false }, { note: 523.25, unlocked: false },
+                { note: 329.63, unlocked: false }, { note: 392.00, unlocked: false }, 
+                { note: 523.25, unlocked: false }, { note: 659.25, unlocked: false },
+                { note: 349.23, unlocked: false }, { note: 440.00, unlocked: false }, 
+                { note: 523.25, unlocked: false }, { note: 698.46, unlocked: false },
+                { note: 392.00, unlocked: false }, { note: 493.88, unlocked: false }, 
+                { note: 587.33, unlocked: false }, { note: 261.63, unlocked: false }
+            ],
+            init: function() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC(); this.startDrone(); this.startSequencer();
+            },
+            startDrone: function() {
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = 'sine'; osc.frequency.value = 55; gain.gain.value = 0.05;
+                osc.connect(gain); gain.connect(this.ctx.destination); osc.start();
+            },
+            startSequencer: function() { setInterval(() => { this.playStep(); }, 250); },
+            playStep: function() {
+                if (!this.ctx) return;
+                document.querySelectorAll('.note-indicator').forEach(el => el.classList.remove('playing'));
+                document.getElementById(`n${this.step}`).classList.add('playing');
+                if (this.melodyMap[this.step].unlocked) this.playTone(this.melodyMap[this.step].note, this.step === 15);
+                this.step = (this.step + 1) % 16;
+            },
+            playTone: function(freq, isHeartNote) {
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = isHeartNote ? 'sine' : 'triangle'; osc.frequency.value = freq;
+                const now = this.ctx.currentTime;
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(isHeartNote ? 0.3 : 0.1, now + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(now + 1);
+            },
+            unlockNote: function(index) {
+                if (index < 16) {
+                    this.melodyMap[index].unlocked = true;
+                    document.getElementById(`n${index}`).classList.add('active');
+                    this.playTone(this.melodyMap[index].note, index === 15);
+                }
+            }
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-wrapper');
+        const gameBox = document.getElementById('game-container');
+        const dText = document.getElementById('diegetic-text');
+
+        const player = { x: 450, y: 600, w: 24, h: 24, speed: 4, color: '#fff' };
+        const cat = { name: "Companion", color: "#ffffff", data: {} };
+        
+        let keys = {};
+        let activeTrigger = null;
+        let isModalOpen = false;
+        let memoriesFound = 0;
+        let isFinished = false;
+        let gameRunning = false;
+        let hasMoved = false;
+        let currentTagIndex = 0;
+        let totalTags = 0;
+
+        // SCALING LOGIC FOR MOBILE
+        function resizeGame() {
+            const winW = window.innerWidth;
+            const winH = window.innerHeight;
+            const scale = Math.min(winW / 900, winH / 700);
+            gameBox.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', resizeGame);
+        resizeGame(); // Initial Call
+
+        const triggers = [
+            { id: 'photo', x: 420, y: 650, w: 60, h: 10, c: '#aaa', label: 'Photo', noteIdx: 0, solved: false, type: 'text', title: 'IDENTITY', q: "Name?", prop: 'name' },
+            { id: 'sofa', x: 100, y: 400, w: 120, h: 60, c: '#556', label: 'Sofa', noteIdx: 1, solved: false, type: 'tags', title: 'CUDDLES', q: "Affection?", opts: ["Lap Cat", "Observer", "Independent", "Velcro", "Hated Hugs"], prop: 'cuddles' },
+            { id: 'tv', x: 50, y: 300, w: 20, h: 80, c: '#222', label: 'TV', noteIdx: 2, solved: false, type: 'slider', title: 'ATTENTION', q: "Screens?", min: "Ignored", max: "Watcher", prop: 'screens' },
+            { id: 'scratch', x: 200, y: 550, w: 30, h: 80, c: '#8b5a2b', label: 'Post', noteIdx: 3, solved: false, type: 'slider', title: 'DESTRUCTION', q: "Furniture?", min: "Angel", max: "Shredder", prop: 'destruct' },
+            { id: 'mouse', x: 300, y: 450, w: 15, h: 15, c: '#ff0055', label: 'Toy', noteIdx: 4, solved: false, type: 'slider', title: 'HUNTING', q: "Prey Drive?", min: "Peaceful", max: "Apex Predator", prop: 'hunt' },
+            { id: 'bowl', x: 700, y: 100, w: 30, h: 30, c: '#ff9900', label: 'Bowl', noteIdx: 5, solved: false, type: 'slider', title: 'APPETITE', q: "Food?", min: "Picky", max: "Vacuum", prop: 'food' },
+            { id: 'water', x: 750, y: 100, w: 30, h: 30, c: '#00ccff', label: 'Water', noteIdx: 6, solved: false, type: 'tags', title: 'DRINKING', q: "Style?", opts: ["Tap", "Paw Dip", "Messy", "Elegant", "Toilet"], prop: 'drink' },
+            { id: 'treat', x: 650, y: 80, w: 20, h: 30, c: '#ffcc00', label: 'Treats', noteIdx: 7, solved: false, type: 'text', title: 'SNACK', q: "Fav Treat?", prop: 'snack' },
+            { id: 'bed', x: 100, y: 100, w: 80, h: 60, c: '#9933cc', label: 'Bed', noteIdx: 8, solved: false, type: 'tags', title: 'SLEEP', q: "Sleep Spot?", opts: ["My Face", "Box", "Floor", "Bed", "Laundry"], prop: 'sleep' },
+            { id: 'mirror', x: 50, y: 50, w: 40, h: 80, c: '#aaddff', label: 'Mirror', noteIdx: 9, solved: false, type: 'color', title: 'LOOKS', q: "Coat Color?", prop: 'color' },
+            { id: 'closet', x: 200, y: 40, w: 100, h: 40, c: '#5c4033', label: 'Closet', noteIdx: 10, solved: false, type: 'slider', title: 'GROOMING', q: "Fluffiness?", min: "Sleek", max: "Cloud", prop: 'fluff' },
+            { id: 'litter', x: 800, y: 600, w: 50, h: 40, c: '#888', label: 'Litter', noteIdx: 11, solved: false, type: 'slider', title: 'CLEAN', q: "Habits?", min: "Messy", max: "Clean", prop: 'clean' },
+            { id: 'window', x: 400, y: 20, w: 100, h: 10, c: '#fff', label: 'Window', noteIdx: 12, solved: false, type: 'slider', title: 'VOCAL', q: "Talkative?", min: "Silent", max: "Screamer", prop: 'vocal' },
+            { id: 'plant', x: 800, y: 300, w: 40, h: 60, c: '#00ff00', label: 'Plant', noteIdx: 13, solved: false, type: 'tags', title: 'QUIRKS', q: "Weirdness?", opts: ["Ate Plants", "Chased Tail", "Kneaded", "Opener", "Bugs"], prop: 'quirks' },
+            { id: 'yarn', x: 500, y: 300, w: 25, h: 25, c: '#ff6666', label: 'Yarn', noteIdx: 14, solved: false, type: 'slider', title: 'ENERGY', q: "Energy?", min: "Potato", max: "Nuclear", prop: 'energy' },
+            { id: 'heart', x: 440, y: 340, w: 20, h: 20, c: '#ff3366', label: 'Heart', noteIdx: 15, solved: false, type: 'final', title: 'THE SOUL', q: "", hidden: true }
+        ];
+
+        window.addEventListener('keydown', e => {
+            if (!gameRunning) { startGame(); return; }
+            keys[e.key] = true;
+            handleInput(e.key);
+        });
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        // MOBILE INPUT MAPPING
+        function setupMobileControls() {
+            const bind = (id, key) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; handleInput(key); });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+            };
+            bind('d-up', 'ArrowUp');
+            bind('d-down', 'ArrowDown');
+            bind('d-left', 'ArrowLeft');
+            bind('d-right', 'ArrowRight');
+            bind('act-btn', 'Enter');
+        }
+        setupMobileControls();
+
+        function handleInput(key) {
+            if (isModalOpen) {
+                handleUIInput(key);
+            } else {
+                if ((key === ' ' || key === 'Enter') && gameRunning) checkInteraction();
+                if (!hasMoved && (key.startsWith('Arrow') || ['w','a','s','d'].includes(key))) {
+                    hasMoved = true;
+                    dText.style.opacity = 0;
+                    setTimeout(() => {
+                        dText.innerText = "Some things respond when you are close.";
+                        dText.style.opacity = 1;
+                        setTimeout(() => { dText.style.opacity = 0; }, 4000);
+                    }, 1000);
+                }
+            }
+        }
+
+        function handleUIInput(key) {
+            if (key === 'Enter') { confirmMemory(); return; }
+
+            if (activeTrigger.type === 'slider') {
+                const slider = document.getElementById('inp-val');
+                if (key === 'ArrowRight') slider.value = parseInt(slider.value) + 5;
+                if (key === 'ArrowLeft') slider.value = parseInt(slider.value) - 5;
+            } 
+            else if (activeTrigger.type === 'tags' || activeTrigger.type === 'color') {
+                const tags = document.querySelectorAll('.tag');
+                if (key === 'ArrowRight') currentTagIndex = (currentTagIndex + 1) % totalTags;
+                if (key === 'ArrowLeft') currentTagIndex = (currentTagIndex - 1 + totalTags) % totalTags;
+                
+                tags.forEach((t, i) => {
+                    if (i === currentTagIndex) t.classList.add('focused');
+                    else t.classList.remove('focused');
+                });
+
+                if (activeTrigger.type === 'color') {
+                    document.getElementById('inp-val').value = tags[currentTagIndex].dataset.val;
+                }
+
+                if ((key === ' ' || key === 'Enter') && activeTrigger.type === 'tags') {
+                    tags[currentTagIndex].classList.toggle('selected');
+                }
+            }
+        }
+
+        function startGame() {
+            if (gameRunning) return;
+            document.getElementById('start-overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('start-overlay').style.display = 'none', 1000);
+            dText.style.opacity = 1;
+            gameRunning = true; AudioEngine.init(); loop();
+        }
+
+        function checkInteraction() {
+            // LOCK THE GAME IF FINISHED
+            if (isFinished) return;
+
+            triggers.forEach(t => {
+                if (t.hidden) return;
+                const cx = t.x + t.w/2; const cy = t.y + t.h/2;
+                if (Math.hypot(player.x - cx, player.y - cy) < 60) {
+                    if (t.type === 'final') completeHeart(t);
+                    else openModal(t);
+                }
+            });
+        }
+
+        function openModal(t) {
+            isModalOpen = true; activeTrigger = t; keys = {}; // Reset keys
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('m-content');
+            modal.style.display = 'block';
+            document.getElementById('m-title').innerText = t.title;
+            content.innerHTML = ''; 
+
+            const savedVal = cat.data[t.prop]; 
+
+            if (t.type === 'text') {
+                content.innerHTML = `<label>${t.q}</label><input type="text" id="inp-val" placeholder="Type here..." autocomplete="off" value="${savedVal || ''}">`;
+                setTimeout(() => document.getElementById('inp-val').focus(), 50);
+            }
+            else if (t.type === 'slider') {
+                content.innerHTML = `<label>${t.q}</label><input type="range" id="inp-val" min="0" max="100" value="${savedVal || 50}"><div style="display:flex;justify-content:space-between;color:#888;"><span>${t.min}</span><span>${t.max}</span></div>`;
+                setTimeout(() => document.getElementById('inp-val').focus(), 50);
+            }
+            else if (t.type === 'tags') { 
+                let h = `<label>${t.q}</label><div class="tags-container">`; 
+                t.opts.forEach((o, i) => {
+                    const isSelected = savedVal && savedVal.includes(o) ? 'selected' : '';
+                    h += `<div class="tag ${isSelected}" data-idx="${i}">${o}</div>`;
+                }); 
+                content.innerHTML = h + `</div>`; 
+                currentTagIndex = 0; totalTags = t.opts.length;
+                setTimeout(() => document.querySelectorAll('.tag')[0].classList.add('focused'), 50);
+            }
+            else if (t.type === 'color') {
+                const cs = [{c:'#fff', n:'Snow'},{c:'#444', n:'Coal'},{c:'#ff8800', n:'Ginger'},{c:'#8899aa', n:'Blue'},{c:'#dcb183', n:'Calico'}];
+                let h = `<label>${t.q}</label><div class="tags-container">`;
+                cs.forEach((c, i) => h += `<div class="tag" data-idx="${i}" data-val="${c.c}" style="background:${c.c}; color:${c.c==='#fff'?'#000':'#fff'};">${c.n}</div>`);
+                content.innerHTML = h + `</div><input type="hidden" id="inp-val" value="#fff">`;
+                currentTagIndex = 0; totalTags = cs.length;
+                setTimeout(() => document.querySelectorAll('.tag')[0].classList.add('focused'), 50);
+            }
+            
+            // Adjust hint for mobile
+            if(window.innerWidth < 900) {
+                document.getElementById('hint-txt').innerText = "[D-PAD] Adjust • [OK] Confirm";
+            }
+        }
+
+        function confirmMemory() {
+            let val = null;
+            if(document.getElementById('inp-val')) val = document.getElementById('inp-val').value;
+
+            if (activeTrigger.type === 'tags') {
+                const selected = [];
+                document.querySelectorAll('.tag.selected').forEach(el => selected.push(el.innerText));
+                cat.data[activeTrigger.prop] = selected;
+            } else {
+                cat.data[activeTrigger.prop] = val;
+            }
+
+            if(activeTrigger.prop === 'name') cat.name = val || cat.name;
+            if(activeTrigger.prop === 'color') cat.color = val;
+
+            document.getElementById('modal').style.display = 'none';
+            isModalOpen = false;
+            
+            if (!activeTrigger.solved) {
+                activeTrigger.solved = true; 
+                memoriesFound++;
+                document.getElementById('mem-count').innerText = memoriesFound;
+                if (memoriesFound === 15) spawnHeart();
+            }
+
+            AudioEngine.unlockNote(activeTrigger.noteIdx);
+            updateEnvironment();
+        }
+
+        function spawnHeart() {
+            const heart = triggers.find(t => t.id === 'heart');
+            heart.hidden = false;
+        }
+
+        function completeHeart(t) {
+            t.solved = true; memoriesFound++;
+            document.getElementById('mem-count').innerText = memoriesFound;
+            AudioEngine.unlockNote(15);
+            finishGame();
+        }
+
+        function updateEnvironment() {
+            const progress = memoriesFound / 16;
+            const gray = 100 - (progress * 100);
+            const bright = 60 + (progress * 50); 
+            const contrast = 120 - (progress * 20); 
+            const sepia = progress * 40; 
+            canvas.style.filter = `grayscale(${gray}%) brightness(${bright}%) contrast(${contrast}%) sepia(${sepia}%)`;
+            if(progress > 0.8) gameBox.style.borderColor = '#d4af37';
+        }
+
+        function finishGame() {
+            isFinished = true;
+            document.getElementById('cat-name-display').innerText = cat.name;
+            document.getElementById('final-screen').style.display = 'flex';
+            setTimeout(() => document.getElementById('final-msg').classList.add('show'), 1500);
+        }
+
+        function drawHeart(x, y) {
+            const beat = Math.sin(Date.now() / 200) * 2;
+            ctx.fillStyle = '#ff3366'; ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 20;
+            ctx.fillRect(x - 10 - beat/2, y - 10 - beat/2, 8, 8);
+            ctx.fillRect(x + 2 + beat/2, y - 10 - beat/2, 8, 8);
+            ctx.fillRect(x - 14 - beat/2, y - 2, 28 + beat, 8);
+            ctx.fillRect(x - 6, y + 6, 12, 8);
+            ctx.fillRect(x - 2, y + 14, 4, 4);
+            ctx.shadowBlur = 0;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111'; ctx.fillRect(0,0,900,700);
+            ctx.strokeStyle = '#222'; ctx.lineWidth=1;
+            for(let i=0;i<900;i+=50){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,700);ctx.stroke();}
+            for(let i=0;i<700;i+=50){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(900,i);ctx.stroke();}
+
+            triggers.forEach(t => {
+                if (t.hidden) return;
+                if (t.type === 'final') { if (!t.solved) drawHeart(t.x + t.w/2, t.y + t.h/2); } 
+                else {
+                    ctx.fillStyle = t.solved ? t.c : '#222';
+                    ctx.strokeStyle = t.solved ? '#111' : '#444';
+                    ctx.fillRect(t.x, t.y, t.w, t.h); ctx.strokeRect(t.x, t.y, t.w, t.h);
+                    
+                    // DRAW INTERACT PROMPT
+                    if (!isFinished && !isModalOpen && Math.hypot(player.x-(t.x+t.w/2), player.y-(t.y+t.h/2)) < 60) {
+                        ctx.fillStyle='#fff'; 
+                        const txt = t.solved ? 'REVISIT' : 'TAP/SPACE';
+                        ctx.fillText(txt, t.x+t.w/2-(txt.length*4), t.y-10);
+                    }
+                }
+            });
+
+            ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.w, player.h);
+            
+            if(memoriesFound > 0) {
+                const cx = player.x-30; const cy = player.y+5;
+                let alpha = memoriesFound/16; if(isFinished) alpha=1;
+                ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = cat.color;
+                ctx.fillRect(cx, cy, 20, 16); ctx.fillRect(cx+2, cy-8, 14, 10); 
+                ctx.fillRect(cx+2, cy-12, 4, 4); ctx.fillRect(cx+12, cy-12, 4, 4); 
+                let wag = Math.sin(Date.now()/300)*5; ctx.fillRect(cx-4, cy+4+wag, 4, 10); 
+                
+                ctx.fillStyle = (cat.color === '#444' || cat.color === '#222') ? '#fff' : '#000';
+                ctx.fillRect(cx+4, cy-6, 2, 2); ctx.fillRect(cx+10, cy-6, 2, 2);
+                
+                ctx.restore();
+            }
+
+            if(isFinished) {
+                ctx.fillStyle = 'rgba(255, 220, 180, 0.08)'; ctx.fillRect(0,0,900,700);
+            } else {
+                const r = 150 + (memoriesFound * 25); 
+                const grad = ctx.createRadialGradient(player.x+12, player.y+12, 20, player.x+12, player.y+12, r);
+                grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.98)');
+                ctx.fillStyle = grad; ctx.fillRect(0,0,900,700);
+            }
+        }
+
+        function loop() {
+            if(gameRunning) {
+                if(!isModalOpen) {
+                    if(keys['ArrowUp']||keys['w']) player.y-=player.speed;
+                    if(keys['ArrowDown']||keys['s']) player.y+=player.speed;
+                    if(keys['ArrowLeft']||keys['a']) player.x-=player.speed;
+                    if(keys['ArrowRight']||keys['d']) player.x+=player.speed;
+                    player.x=Math.max(0,Math.min(900-player.w,player.x));
+                    player.y=Math.max(0,Math.min(700-player.h,player.y));
+                }
+                draw();
+            }
+            requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+</html>
